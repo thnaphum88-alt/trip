@@ -1,6 +1,17 @@
-const express = require("express");
-const cors = require("cors");
-const { v4: uuidv4 } = require("uuid");
+const multer = require("multer");
+const path = require("path");
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
+});
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+
+// สร้างโฟลเดอร์ uploads
+const fs = require("fs");
+if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
+
+app.use("/uploads", express.static("uploads"));
 
 const app = express();
 const PORT = process.env.PORT || 3001;
