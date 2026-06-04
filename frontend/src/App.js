@@ -5,7 +5,7 @@ import Members from "./components/Members";
 import Transactions from "./components/Transactions";
 import "./App.css";
 
-const API = "http://localhost:3001/api";
+const API = "https://bptripfund.vercel.app/api";
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
