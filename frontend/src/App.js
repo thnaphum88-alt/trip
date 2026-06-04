@@ -5,7 +5,7 @@ import Members from "./components/Members";
 import Transactions from "./components/Transactions";
 import "./App.css";
 
-const API = "trip-7lis.vercel.app";
+const API = "https://trip-7lis.vercel.app/api";
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
