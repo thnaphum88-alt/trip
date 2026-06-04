@@ -1,6 +1,16 @@
 import React, { useState } from "react";
 import "./LogActivity.css";
 
+const [image, setImage] = useState(null);
+const [preview, setPreview] = useState(null);
+
+const handleImage = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setImage(file);
+  setPreview(URL.createObjectURL(file));
+};
+
 const ACTIVITY_META = {
   exercise: { label: "ออกกำลังกาย", icon: "🏃", desc: "วิ่ง ว่ายน้ำ ยิม ฯลฯ" },
   drawing:  { label: "วาดรูป",       icon: "🎨", desc: "วาดภาพระบายสี ฯลฯ" },
@@ -17,18 +27,27 @@ export default function LogActivity({ members, activities, onSubmit }) {
   const selectedActivity = activities.find((a) => a.key === activity);
 
   const handleSubmit = async () => {
-    if (!memberId || !activity) return;
-    setLoading(true);
-    const ok = await onSubmit({ memberId, activity, note });
-    setLoading(false);
-    if (ok) {
-      setSuccess(true);
-      setMemberId("");
-      setActivity("");
-      setNote("");
-      setTimeout(() => setSuccess(false), 2500);
-    }
-  };
+  if (!memberId || !activity) return;
+  setLoading(true);
+
+  const formData = new FormData();
+  formData.append("memberId", memberId);
+  formData.append("activity", activity);
+  formData.append("note", note);
+  if (image) formData.append("image", image);
+
+  const res = await fetch("https://trip-7lis.vercel.app/api/transactions", {
+    method: "POST",
+    body: formData,
+  });
+  setLoading(false);
+  if (res.ok) {
+    setSuccess(true);
+    setMemberId(""); setActivity(""); setNote("");
+    setImage(null); setPreview(null);
+    setTimeout(() => setSuccess(false), 2500);
+  }
+};
 
   if (success) {
     return (
@@ -119,6 +138,27 @@ export default function LogActivity({ members, activities, onSubmit }) {
           />
         </div>
 
+        <div className="field">
+  <label className="field-label">แนบรูปภาพ (ไม่บังคับ)</label>
+  <label className="upload-box">
+    {preview ? (
+      <img src={preview} alt="preview" className="upload-preview" />
+    ) : (
+      <div className="upload-placeholder">
+        <span>📷</span>
+        <span>แตะเพื่อเลือกรูป</span>
+      </div>
+    )}
+    <input type="file" accept="image/*" onChange={handleImage} style={{ display: "none" }} />
+  </label>
+  {preview && (
+    <button className="btn-ghost"
+      style={{ marginTop: 8, fontSize: 13 }}
+      onClick={() => { setImage(null); setPreview(null); }}>
+      ลบรูป
+    </button>
+  )}
+</div>      
         <button
           className="btn-primary submit-btn"
           disabled={!memberId || !activity || loading}
