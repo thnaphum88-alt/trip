@@ -103,13 +103,13 @@ app.get("/api/transactions", (req, res) => {
 });
 
 // POST /api/transactions  — log an activity payment
-app.post("/api/transactions", (req, res) => {
+app.post("/api/transactions", upload.single("image"), (req, res) => {
   const { memberId, activity, note } = req.body;
 
   if (!memberId) return res.status(400).json({ error: "ต้องระบุสมาชิก" });
-  if (!activity || !ACTIVITY_FINES[activity]) {
+  if (!activity || !ACTIVITY_FINES[activity])
     return res.status(400).json({ error: "กิจกรรมไม่ถูกต้อง" });
-  }
+
   const member = members.find((m) => m.id === memberId);
   if (!member) return res.status(404).json({ error: "ไม่พบสมาชิก" });
 
@@ -120,10 +120,12 @@ app.post("/api/transactions", (req, res) => {
     activity,
     amount,
     note: note || "",
+    imageUrl: req.file ? `/uploads/${req.file.filename}` : null,
     createdAt: new Date().toISOString(),
   };
   transactions.push(tx);
   res.status(201).json({ ...tx, memberName: member.name });
+});
 });
 
 // DELETE /api/transactions/:id
