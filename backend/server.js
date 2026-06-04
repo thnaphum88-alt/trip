@@ -5,7 +5,10 @@ const { v4: uuidv4 } = require("uuid");
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: ["https://bptripfund.vercel.app", "http://localhost:3000"],
+  methods: ["GET", "POST", "DELETE"],
+}));
 app.use(express.json());
 
 // ── In-memory data store ──────────────────────────────────────────────────────
