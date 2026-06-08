@@ -1,17 +1,9 @@
+const express = require("express");
+const cors = require("cors");
+const { v4: uuidv4 } = require("uuid");
 const multer = require("multer");
 const path = require("path");
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
-});
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
-
-// สร้างโฟลเดอร์ uploads
 const fs = require("fs");
-if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
-
-app.use("/uploads", express.static("uploads"));
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -22,23 +14,24 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// ── In-memory data store ──────────────────────────────────────────────────────
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
 let members = [
   { id: uuidv4(), name: "สมชาย", avatar: "ส" },
   { id: uuidv4(), name: "มานี", avatar: "ม" },
   { id: uuidv4(), name: "วิชัย", avatar: "ว" },
 ];
-
 let transactions = [];
 
-// Activity fine amounts (THB)
 const ACTIVITY_FINES = {
-  exercise: 20,   // ออกกำลังกาย
-  drawing: 30,    // วาดรูป
-  movie: 50,      // ดูหนัง
+  exercise: 20,
+  drawing: 30,
+  movie: 50,
 };
 
-// ── Helper ───────────────────────────────────────────────────────────────────
 function calcStats() {
   const total = transactions.reduce((sum, t) => sum + t.amount, 0);
   const memberTotals = {};
@@ -51,41 +44,23 @@ function calcStats() {
   return { total, memberTotals };
 }
 
-// ── Routes ────────────────────────────────────────────────────────────────────
-
-// GET /api/activities — return activity definitions
 app.get("/api/activities", (req, res) => {
-  res.json(
-    Object.entries(ACTIVITY_FINES).map(([key, amount]) => ({ key, amount }))
-  );
+  res.json(Object.entries(ACTIVITY_FINES).map(([key, amount]) => ({ key, amount })));
 });
 
-// GET /api/members
 app.get("/api/members", (req, res) => {
   const { memberTotals } = calcStats();
-  const enriched = members.map((m) => ({
-    ...m,
-    totalContributed: memberTotals[m.id] || 0,
-  }));
-  res.json(enriched);
+  res.json(members.map((m) => ({ ...m, totalContributed: memberTotals[m.id] || 0 })));
 });
 
-// POST /api/members
 app.post("/api/members", (req, res) => {
   const { name } = req.body;
-  if (!name || !name.trim()) {
-    return res.status(400).json({ error: "ต้องระบุชื่อสมาชิก" });
-  }
-  const member = {
-    id: uuidv4(),
-    name: name.trim(),
-    avatar: name.trim().charAt(0).toUpperCase(),
-  };
+  if (!name || !name.trim()) return res.status(400).json({ error: "ต้องระบุชื่อสมาชิก" });
+  const member = { id: uuidv4(), name: name.trim(), avatar: name.trim().charAt(0).toUpperCase() };
   members.push(member);
   res.status(201).json(member);
 });
 
-// DELETE /api/members/:id
 app.delete("/api/members/:id", (req, res) => {
   const idx = members.findIndex((m) => m.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: "ไม่พบสมาชิก" });
@@ -93,7 +68,6 @@ app.delete("/api/members/:id", (req, res) => {
   res.json({ success: true });
 });
 
-// GET /api/transactions
 app.get("/api/transactions", (req, res) => {
   const enriched = transactions.map((t) => ({
     ...t,
@@ -102,33 +76,29 @@ app.get("/api/transactions", (req, res) => {
   res.json(enriched.slice().reverse());
 });
 
-// POST /api/transactions  — log an activity payment
 app.post("/api/transactions", upload.single("image"), (req, res) => {
   const { memberId, activity, note } = req.body;
-
   if (!memberId) return res.status(400).json({ error: "ต้องระบุสมาชิก" });
-  if (!activity || !ACTIVITY_FINES[activity])
-    return res.status(400).json({ error: "กิจกรรมไม่ถูกต้อง" });
-
+  if (!activity || !ACTIVITY_FINES[activity]) return res.status(400).json({ error: "กิจกรรมไม่ถูกต้อง" });
   const member = members.find((m) => m.id === memberId);
   if (!member) return res.status(404).json({ error: "ไม่พบสมาชิก" });
 
-  const amount = ACTIVITY_FINES[activity];
+  let imageUrl = null;
+  if (req.file) {
+    const base64 = req.file.buffer.toString("base64");
+    imageUrl = `data:${req.file.mimetype};base64,${base64}`;
+  }
+
   const tx = {
-    id: uuidv4(),
-    memberId,
-    activity,
-    amount,
-    note: note || "",
-    imageUrl: req.file ? `/uploads/${req.file.filename}` : null,
+    id: uuidv4(), memberId, activity,
+    amount: ACTIVITY_FINES[activity],
+    note: note || "", imageUrl,
     createdAt: new Date().toISOString(),
   };
   transactions.push(tx);
   res.status(201).json({ ...tx, memberName: member.name });
 });
-});
 
-// DELETE /api/transactions/:id
 app.delete("/api/transactions/:id", (req, res) => {
   const idx = transactions.findIndex((t) => t.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: "ไม่พบรายการ" });
@@ -136,22 +106,16 @@ app.delete("/api/transactions/:id", (req, res) => {
   res.json({ success: true });
 });
 
-// GET /api/stats
 app.get("/api/stats", (req, res) => {
   const { total, memberTotals } = calcStats();
-
   const activityBreakdown = {};
   Object.keys(ACTIVITY_FINES).forEach((k) => (activityBreakdown[k] = 0));
   transactions.forEach((t) => (activityBreakdown[t.activity] += t.amount));
-
   const leaderboard = members
     .map((m) => ({ id: m.id, name: m.name, avatar: m.avatar, total: memberTotals[m.id] || 0 }))
     .sort((a, b) => b.total - a.total);
-
   res.json({ total, activityBreakdown, leaderboard, transactionCount: transactions.length });
 });
 
-// ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`🚀 Trip Fund API running on http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Running on http://localhost:${PORT}`));
+module.exports = app;
